@@ -33,21 +33,34 @@ class HTTPResponse(object):
         self.body = body
 
 class HTTPClient(object):
-    #def get_host_port(self,url):
-
+    def get_host_port(self,url):
+        try:
+            #print(url)
+            addr = url.split(":")
+            host = addr[0]
+            port = addr[1]
+        except:
+            host = socket.gethostbyname(url)
+            port = 80
+        return host, port
+    		
     def connect(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((host, port))
         return None
 
     def get_code(self, data):
-        return None
+        response = data.split("\r\n")
+        code = response[0].split()
+        return code[1]
 
     def get_headers(self,data):
-        return None
+        response = data.split("\r\n\r\n")
+        return response[0]
 
     def get_body(self, data):
-        return None
+        response = data.split("\r\n\r\n")
+        return response[1]
     
     def sendall(self, data):
         self.socket.sendall(data.encode('utf-8'))
@@ -68,13 +81,53 @@ class HTTPClient(object):
         return buffer.decode('utf-8')
 
     def GET(self, url, args=None):
-        code = 500
-        body = ""
+        if url[-1] != "/":
+            url = url + "/"
+        url_info = urllib.parse.urlparse(url)
+        host = url_info.netloc
+        path = url_info.path
+        host, port = self.get_host_port(host)
+        content = ("""GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: browser details\r\nAccept: */*\r\nAccept-Language: en\r\nConnection: close\r\n\r\n"""%(path, url_info.netloc))
+        #print(content)
+        #print("host : %s prot : %s\n"%(host,port))
+        self.connect(host, int(port))
+        self.sendall(content)
+        #self.socket.shutdown(socket.SHUT_WR)
+        full_data = self.recvall(self.socket)
+        print(full_data)
+        self.close()
+        code = int(self.get_code(full_data))
+        body = self.get_body(full_data)
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        code = 500
-        body = ""
+        if url[-1] != "/":
+            url = url + "/"
+        url_info = urllib.parse.urlparse(url)
+        host = url_info.netloc
+        path = url_info.path
+        host, port = self.get_host_port(host)
+        to_post = ""
+        if args != None:
+            for key, value in args.items():
+                to_post = to_post + key.replace(" ", "+") + "=" + value.replace(" ", "+") +"&"
+            to_post = to_post + "\r\n"
+            #print("to_post: " + to_post)
+            #print(len(to_post))
+            length = len(to_post)
+            content = ("""POST %s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nUser-Agent: browser details\r\nAccept: */*\r\nAccept-Language: en\r\nConnection: close\r\n\r\n%s"""%(path, host, length, to_post))
+        else:
+            content = ("""POST %s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\nUser-Agent: browser details\r\nAccept: */*\r\nAccept-Language: en\r\nConnection: close\r\n\r\n"""%(path, host))
+        #print(content)
+        #print("host : %s prot : %s\n"%(host,port))
+        self.connect(host, int(port))
+        self.sendall(content)
+        #self.socket.shutdown(socket.SHUT_WR)
+        full_data = self.recvall(self.socket)
+        print(full_data)
+        self.close()
+        code = int(self.get_code(full_data))
+        body = self.get_body(full_data)
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
